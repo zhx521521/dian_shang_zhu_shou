@@ -1,0 +1,615 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductStatus {
+  draft
+  active
+  inactive
+  archived
+}
+
+enum DiagnosisStatus {
+  generating
+  generated
+  generation_failed
+  confirmed
+  archived
+}
+
+enum CreativeType {
+  image_plan
+  video_script
+}
+
+enum TaskType {
+  image
+  video
+}
+
+enum TaskStatus {
+  pending
+  running
+  cancelling
+  cancelled
+  succeeded
+  failed
+  timed_out
+}
+
+enum AssetStatus {
+  draft
+  pending_review
+  approved
+  rejected
+  archived
+}
+
+enum ExperimentStatus {
+  draft
+  pending_approval
+  approved
+  rejected
+  closed
+}
+
+enum ApprovalDecision {
+  approved
+  rejected
+}
+
+enum ImportType {
+  product
+  sku_inventory
+  competitor
+  metric
+}
+
+enum ImportStatus {
+  uploaded
+  validating
+  ready
+  importing
+  completed
+  failed
+}
+
+model User {
+  id              String               @id @default(uuid()) @db.Uuid
+  username        String               @unique @db.VarChar(80)
+  passwordHash    String               @map("password_hash") @db.VarChar(255)
+  displayName     String               @map("display_name") @db.VarChar(100)
+  active          Boolean              @default(true)
+  lastLoginAt     DateTime?            @map("last_login_at")
+  failedLogins    Int                  @default(0) @map("failed_logins")
+  lockedUntil     DateTime?            @map("locked_until")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  roles           UserRole[]
+  shopPermissions ShopUserPermission[]
+
+  @@map("users")
+}
+
+model Role {
+  id        String     @id @default(uuid()) @db.Uuid
+  code      String     @unique @db.VarChar(40)
+  name      String     @db.VarChar(80)
+  createdAt DateTime   @default(now()) @map("created_at")
+  users     UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model Shop {
+  id          String               @id @default(uuid()) @db.Uuid
+  platform    String               @db.VarChar(40)
+  code        String               @unique @db.VarChar(80)
+  name        String               @db.VarChar(120)
+  active      Boolean              @default(true)
+  archivedAt  DateTime?            @map("archived_at")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  createdBy   String               @map("created_by") @db.Uuid
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+  updatedBy   String               @map("updated_by") @db.Uuid
+  version     Int                  @default(1)
+  permissions ShopUserPermission[]
+  products    Product[]
+
+  @@map("shops")
+}
+
+model ShopUserPermission {
+  shopId    String   @map("shop_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  canWrite  Boolean  @default(false) @map("can_write")
+  createdAt DateTime @default(now()) @map("created_at")
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([shopId, userId])
+  @@index([userId])
+  @@map("shop_user_permissions")
+}
+
+model Product {
+  id                String                   @id @default(uuid()) @db.Uuid
+  shopId            String                   @map("shop_id") @db.Uuid
+  name              String                   @db.VarChar(200)
+  category          String                   @db.VarChar(120)
+  brand             String                   @db.VarChar(120)
+  mainImageUrl      String?                  @map("main_image_url") @db.Text
+  status            ProductStatus            @default(draft)
+  ownerId           String                   @map("owner_id") @db.Uuid
+  archivedAt        DateTime?                @map("archived_at")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  createdBy         String                   @map("created_by") @db.Uuid
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+  updatedBy         String                   @map("updated_by") @db.Uuid
+  version           Int                      @default(1)
+  shop              Shop                     @relation(fields: [shopId], references: [id])
+  skus              Sku[]
+  platformMappings  PlatformProductMapping[]
+  competitors       Competitor[]
+  diagnoses         DiagnosisRun[]
+  creativeProjects  CreativeProject[]
+  tasks             GenerationTask[]
+  assets            Asset[]
+  experiments       Experiment[]
+  metricRecords     MetricRecord[]
+  reports           Report[]
+
+  @@index([shopId, status])
+  @@index([ownerId])
+  @@map("products")
+}
+
+model Sku {
+  id             String                   @id @default(uuid()) @db.Uuid
+  productId      String                   @map("product_id") @db.Uuid
+  code           String                   @db.VarChar(100)
+  attributes     Json
+  salePrice      Decimal                  @map("sale_price") @db.Decimal(14, 2)
+  availableStock Int                      @default(0) @map("available_stock")
+  warningStock   Int                      @default(0) @map("warning_stock")
+  archivedAt     DateTime?                @map("archived_at")
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  createdBy      String                   @map("created_by") @db.Uuid
+  updatedAt      DateTime                 @updatedAt @map("updated_at")
+  updatedBy      String                   @map("updated_by") @db.Uuid
+  version        Int                      @default(1)
+  product        Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  mappings       PlatformProductMapping[]
+  metricRecords  MetricRecord[]
+
+  @@unique([productId, code])
+  @@index([availableStock, warningStock])
+  @@map("skus")
+}
+
+model PlatformProductMapping {
+  id                String   @id @default(uuid()) @db.Uuid
+  productId         String   @map("product_id") @db.Uuid
+  skuId             String?  @map("sku_id") @db.Uuid
+  platform          String   @db.VarChar(40)
+  externalProductId String   @map("external_product_id") @db.VarChar(160)
+  externalSkuId     String?  @map("external_sku_id") @db.VarChar(160)
+  productUrl        String?  @map("product_url") @db.Text
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now()) @map("created_at")
+  createdBy         String   @map("created_by") @db.Uuid
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  updatedBy         String   @map("updated_by") @db.Uuid
+  version           Int      @default(1)
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku               Sku?     @relation(fields: [skuId], references: [id], onDelete: SetNull)
+
+  @@unique([platform, externalProductId, externalSkuId])
+  @@index([productId])
+  @@map("platform_product_mappings")
+}
+
+model Competitor {
+  id           String   @id @default(uuid()) @db.Uuid
+  productId    String   @map("product_id") @db.Uuid
+  name         String   @db.VarChar(200)
+  platform     String   @db.VarChar(40)
+  sourceUrl    String   @map("source_url") @db.Text
+  price        Decimal  @db.Decimal(14, 2)
+  parameters   Json
+  sellingPoints Json    @map("selling_points")
+  collectedAt  DateTime @map("collected_at")
+  archivedAt   DateTime? @map("archived_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  createdBy    String   @map("created_by") @db.Uuid
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  updatedBy    String   @map("updated_by") @db.Uuid
+  version      Int      @default(1)
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("competitors")
+}
+
+model DiagnosisRun {
+  id             String             @id @default(uuid()) @db.Uuid
+  productId      String             @map("product_id") @db.Uuid
+  status         DiagnosisStatus    @default(generating)
+  inputSnapshot  Json               @map("input_snapshot")
+  modelName      String             @map("model_name") @db.VarChar(120)
+  promptVersion  String             @map("prompt_version") @db.VarChar(40)
+  errorCode      String?            @map("error_code") @db.VarChar(80)
+  errorMessage   String?            @map("error_message") @db.Text
+  confirmedAt    DateTime?          @map("confirmed_at")
+  archivedAt     DateTime?          @map("archived_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  createdBy      String             @map("created_by") @db.Uuid
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  updatedBy      String             @map("updated_by") @db.Uuid
+  version        Int                @default(1)
+  product        Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  versions       DiagnosisVersion[]
+  creativeProjects CreativeProject[]
+
+  @@index([productId, createdAt])
+  @@map("diagnosis_runs")
+}
+
+model DiagnosisVersion {
+  id             String       @id @default(uuid()) @db.Uuid
+  diagnosisRunId String       @map("diagnosis_run_id") @db.Uuid
+  versionNumber  Int          @map("version_number")
+  source         String       @db.VarChar(20)
+  content        Json
+  createdAt      DateTime     @default(now()) @map("created_at")
+  createdBy      String       @map("created_by") @db.Uuid
+  diagnosisRun   DiagnosisRun @relation(fields: [diagnosisRunId], references: [id], onDelete: Cascade)
+
+  @@unique([diagnosisRunId, versionNumber])
+  @@map("diagnosis_versions")
+}
+
+model CreativeProject {
+  id                String            @id @default(uuid()) @db.Uuid
+  productId         String            @map("product_id") @db.Uuid
+  diagnosisRunId    String            @map("diagnosis_run_id") @db.Uuid
+  type              CreativeType
+  name              String            @db.VarChar(200)
+  archivedAt        DateTime?         @map("archived_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  createdBy         String            @map("created_by") @db.Uuid
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  updatedBy         String            @map("updated_by") @db.Uuid
+  version           Int               @default(1)
+  product           Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  diagnosisRun      DiagnosisRun      @relation(fields: [diagnosisRunId], references: [id])
+  versions          CreativeVersion[]
+
+  @@index([productId, type])
+  @@map("creative_projects")
+}
+
+model CreativeVersion {
+  id                String            @id @default(uuid()) @db.Uuid
+  creativeProjectId String            @map("creative_project_id") @db.Uuid
+  versionNumber     Int               @map("version_number")
+  source            String            @db.VarChar(20)
+  content           Json
+  confirmedAt       DateTime?         @map("confirmed_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  createdBy         String            @map("created_by") @db.Uuid
+  creativeProject   CreativeProject   @relation(fields: [creativeProjectId], references: [id], onDelete: Cascade)
+  tasks             GenerationTask[]
+
+  @@unique([creativeProjectId, versionNumber])
+  @@map("creative_versions")
+}
+
+model GenerationTask {
+  id                String              @id @default(uuid()) @db.Uuid
+  productId         String              @map("product_id") @db.Uuid
+  creativeVersionId String              @map("creative_version_id") @db.Uuid
+  type              TaskType
+  status            TaskStatus          @default(pending)
+  provider          String              @db.VarChar(80)
+  idempotencyKey    String              @unique @map("idempotency_key") @db.VarChar(160)
+  payload           Json
+  maxAttempts       Int                 @default(3) @map("max_attempts")
+  timeoutSeconds    Int                 @map("timeout_seconds")
+  cancelRequestedAt DateTime?           @map("cancel_requested_at")
+  startedAt         DateTime?           @map("started_at")
+  completedAt       DateTime?           @map("completed_at")
+  errorCode         String?             @map("error_code") @db.VarChar(80)
+  errorMessage      String?             @map("error_message") @db.Text
+  createdAt         DateTime            @default(now()) @map("created_at")
+  createdBy         String              @map("created_by") @db.Uuid
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  updatedBy         String              @map("updated_by") @db.Uuid
+  version           Int                 @default(1)
+  product           Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  creativeVersion   CreativeVersion     @relation(fields: [creativeVersionId], references: [id])
+  attempts          GenerationAttempt[]
+  assets            Asset[]
+
+  @@index([status, createdAt])
+  @@index([productId])
+  @@map("generation_tasks")
+}
+
+model GenerationAttempt {
+  id                String          @id @default(uuid()) @db.Uuid
+  taskId            String          @map("task_id") @db.Uuid
+  attemptNumber     Int             @map("attempt_number")
+  providerRequestId String?         @map("provider_request_id") @db.VarChar(200)
+  status            TaskStatus
+  requestPayload    Json            @map("request_payload")
+  responsePayload   Json?           @map("response_payload")
+  errorCode         String?         @map("error_code") @db.VarChar(80)
+  errorMessage      String?         @map("error_message") @db.Text
+  startedAt         DateTime        @default(now()) @map("started_at")
+  completedAt       DateTime?       @map("completed_at")
+  task              GenerationTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, attemptNumber])
+  @@map("generation_attempts")
+}
+
+model Asset {
+  id            String         @id @default(uuid()) @db.Uuid
+  productId     String         @map("product_id") @db.Uuid
+  taskId        String?        @map("task_id") @db.Uuid
+  type          TaskType
+  status        AssetStatus    @default(draft)
+  title         String         @db.VarChar(200)
+  tags          String[]
+  archivedAt    DateTime?      @map("archived_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  createdBy     String         @map("created_by") @db.Uuid
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  updatedBy     String         @map("updated_by") @db.Uuid
+  version       Int            @default(1)
+  product       Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  task          GenerationTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  versions      AssetVersion[]
+  reviews       AssetReview[]
+
+  @@index([productId, status])
+  @@map("assets")
+}
+
+model AssetVersion {
+  id            String   @id @default(uuid()) @db.Uuid
+  assetId       String   @map("asset_id") @db.Uuid
+  versionNumber Int      @map("version_number")
+  storageKey    String   @map("storage_key") @db.Text
+  mimeType      String   @map("mime_type") @db.VarChar(100)
+  sizeBytes     BigInt   @map("size_bytes")
+  width         Int?
+  height        Int?
+  durationMs    Int?     @map("duration_ms")
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+  createdBy     String   @map("created_by") @db.Uuid
+  asset         Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, versionNumber])
+  @@map("asset_versions")
+}
+
+model AssetReview {
+  id        String           @id @default(uuid()) @db.Uuid
+  assetId   String           @map("asset_id") @db.Uuid
+  decision  ApprovalDecision
+  comment   String?          @db.Text
+  reviewerId String          @map("reviewer_id") @db.Uuid
+  createdAt DateTime         @default(now()) @map("created_at")
+  asset     Asset            @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId, createdAt])
+  @@map("asset_reviews")
+}
+
+model Experiment {
+  id             String                 @id @default(uuid()) @db.Uuid
+  productId      String                 @map("product_id") @db.Uuid
+  status         ExperimentStatus       @default(draft)
+  currentVersion Int                    @default(1) @map("current_version")
+  executedAt     DateTime?              @map("executed_at")
+  executionNotes String?                @map("execution_notes") @db.Text
+  closedAt       DateTime?              @map("closed_at")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  createdBy      String                 @map("created_by") @db.Uuid
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+  updatedBy      String                 @map("updated_by") @db.Uuid
+  version        Int                    @default(1)
+  product        Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+  versions       ExperimentVersion[]
+  approvals      ExperimentApproval[]
+  metricRecords  MetricRecord[]
+  reports        Report[]
+
+  @@index([productId, status])
+  @@map("experiments")
+}
+
+model ExperimentVersion {
+  id            String      @id @default(uuid()) @db.Uuid
+  experimentId  String      @map("experiment_id") @db.Uuid
+  versionNumber Int         @map("version_number")
+  content       Json
+  submittedAt   DateTime?   @map("submitted_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  createdBy     String      @map("created_by") @db.Uuid
+  experiment    Experiment  @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  approvals     ExperimentApproval[]
+
+  @@unique([experimentId, versionNumber])
+  @@map("experiment_versions")
+}
+
+model ExperimentApproval {
+  id                  String              @id @default(uuid()) @db.Uuid
+  experimentId        String              @map("experiment_id") @db.Uuid
+  experimentVersionId String              @map("experiment_version_id") @db.Uuid
+  decision            ApprovalDecision
+  comment             String?             @db.Text
+  reviewerId          String              @map("reviewer_id") @db.Uuid
+  createdAt           DateTime            @default(now()) @map("created_at")
+  experiment          Experiment          @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  experimentVersion   ExperimentVersion   @relation(fields: [experimentVersionId], references: [id], onDelete: Cascade)
+
+  @@index([experimentId, createdAt])
+  @@map("experiment_approvals")
+}
+
+model MetricRecord {
+  id              String      @id @default(uuid()) @db.Uuid
+  productId       String      @map("product_id") @db.Uuid
+  skuId           String?     @map("sku_id") @db.Uuid
+  experimentId    String?     @map("experiment_id") @db.Uuid
+  metricDate      DateTime    @map("metric_date") @db.Date
+  impressions     Int         @default(0)
+  clicks          Int         @default(0)
+  visitors        Int         @default(0)
+  bouncedVisitors Int         @default(0) @map("bounced_visitors")
+  paidOrders      Int         @default(0) @map("paid_orders")
+  unitsSold       Int         @default(0) @map("units_sold")
+  gmv             Decimal     @default(0) @db.Decimal(16, 2)
+  adSpend         Decimal     @default(0) @map("ad_spend") @db.Decimal(16, 2)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  createdBy       String      @map("created_by") @db.Uuid
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  updatedBy       String      @map("updated_by") @db.Uuid
+  version         Int         @default(1)
+  product         Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku             Sku?        @relation(fields: [skuId], references: [id], onDelete: SetNull)
+  experiment      Experiment? @relation(fields: [experimentId], references: [id], onDelete: SetNull)
+
+  @@index([productId, metricDate])
+  @@map("metric_records")
+}
+
+model Report {
+  id             String          @id @default(uuid()) @db.Uuid
+  productId      String          @map("product_id") @db.Uuid
+  experimentId   String?         @map("experiment_id") @db.Uuid
+  periodStart    DateTime        @map("period_start") @db.Date
+  periodEnd      DateTime        @map("period_end") @db.Date
+  currentVersion Int             @default(1) @map("current_version")
+  confirmedAt    DateTime?       @map("confirmed_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  createdBy      String          @map("created_by") @db.Uuid
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  updatedBy      String          @map("updated_by") @db.Uuid
+  version        Int             @default(1)
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  experiment     Experiment?     @relation(fields: [experimentId], references: [id], onDelete: SetNull)
+  versions       ReportVersion[]
+
+  @@index([productId, periodStart, periodEnd])
+  @@map("reports")
+}
+
+model ReportVersion {
+  id            String   @id @default(uuid()) @db.Uuid
+  reportId      String   @map("report_id") @db.Uuid
+  versionNumber Int      @map("version_number")
+  content       Json
+  markdown      String   @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+  createdBy     String   @map("created_by") @db.Uuid
+  report        Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, versionNumber])
+  @@map("report_versions")
+}
+
+model ImportJob {
+  id            String        @id @default(uuid()) @db.Uuid
+  type          ImportType
+  status        ImportStatus  @default(uploaded)
+  fileName      String        @map("file_name") @db.VarChar(255)
+  storageKey    String        @map("storage_key") @db.Text
+  templateVersion String      @map("template_version") @db.VarChar(40)
+  fieldMapping  Json?         @map("field_mapping")
+  totalRows     Int           @default(0) @map("total_rows")
+  insertedRows  Int           @default(0) @map("inserted_rows")
+  updatedRows   Int           @default(0) @map("updated_rows")
+  skippedRows   Int           @default(0) @map("skipped_rows")
+  failedRows    Int           @default(0) @map("failed_rows")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  createdBy     String        @map("created_by") @db.Uuid
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  updatedBy     String        @map("updated_by") @db.Uuid
+  errors        ImportError[]
+
+  @@index([status, createdAt])
+  @@map("import_jobs")
+}
+
+model ImportError {
+  id        String    @id @default(uuid()) @db.Uuid
+  importJobId String  @map("import_job_id") @db.Uuid
+  rowNumber Int       @map("row_number")
+  fieldName String?   @map("field_name") @db.VarChar(120)
+  rawValue  String?   @map("raw_value") @db.Text
+  errorCode String    @map("error_code") @db.VarChar(80)
+  message   String    @db.Text
+  importJob ImportJob @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+
+  @@index([importJobId, rowNumber])
+  @@map("import_errors")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String   @map("actor_id") @db.Uuid
+  action     String   @db.VarChar(100)
+  objectType String   @map("object_type") @db.VarChar(80)
+  objectId   String   @map("object_id") @db.VarChar(100)
+  shopId     String?  @map("shop_id") @db.Uuid
+  requestId  String   @map("request_id") @db.VarChar(100)
+  before     Json?
+  after      Json?
+  result     String   @db.VarChar(40)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([actorId, createdAt])
+  @@index([objectType, objectId])
+  @@index([shopId, createdAt])
+  @@map("audit_logs")
+}
+
+model ServiceConfig {
+  id                 String   @id @default(uuid()) @db.Uuid
+  serviceType        String   @unique @map("service_type") @db.VarChar(40)
+  baseUrl            String?  @map("base_url") @db.Text
+  modelName          String?  @map("model_name") @db.VarChar(120)
+  encryptedApiKey    String?  @map("encrypted_api_key") @db.Text
+  timeoutSeconds     Int      @default(60) @map("timeout_seconds")
+  maxRetries         Int      @default(3) @map("max_retries")
+  concurrency        Int      @default(2)
+  enabled            Boolean  @default(false)
+  createdAt          DateTime @default(now()) @map("created_at")
+  createdBy          String   @map("created_by") @db.Uuid
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  updatedBy          String   @map("updated_by") @db.Uuid
+  version            Int      @default(1)
+
+  @@map("service_configs")
+}

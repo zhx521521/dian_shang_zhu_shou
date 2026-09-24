@@ -1,0 +1,23 @@
+{
+  "name": "ecommerce-operations-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run db:generate && npm run build --workspaces --if-present",
+    "dev:api": "npm run start:dev -w @eoa/api",
+    "dev:web": "npm run dev -w @eoa/web",
+    "dev:worker": "npm run start:dev -w @eoa/worker",
+    "db:generate": "npm run generate -w @eoa/database",
+    "db:migrate": "npm run migrate -w @eoa/database",
+    "db:seed": "npm run seed -w @eoa/database",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run build -w @eoa/contracts && npm run db:generate && npm run build -w @eoa/database && npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

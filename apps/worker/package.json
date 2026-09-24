@@ -1,0 +1,24 @@
+{
+  "name": "@eoa/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "start:dev": "tsx watch src/index.ts",
+    "test": "node ../../node_modules/vitest/vitest.mjs run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@eoa/contracts": "*",
+    "@eoa/database": "*",
+    "bullmq": "^5.58.5",
+    "dotenv": "^17.2.2",
+    "minio": "^8.0.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
